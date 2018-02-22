@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/patrickmn/go-cache"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -47,19 +46,23 @@ func New(path string) (*Constellation, error) {
 	}
 	// We accept either the socket or a configuration file that points to
 	// a socket.
-	isSocket := info.Mode() & os.ModeSocket != 0
+	isSocket := info.Mode()&os.ModeSocket != 0
+	var cfg *Config
 	if !isSocket {
-		cfg, err := LoadConfig(path)
+		cfg, err = LoadConfig(path)
 		if err != nil {
 			return nil, err
 		}
-		path = filepath.Join(cfg.WorkDir, cfg.Socket)
+	} else {
+		cfg = &Config{
+			Socket: path,
+		}
 	}
-	err = RunNode(path)
+	n, err := NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-	n, err := NewClient(path)
+	err = UpCheck(n)
 	if err != nil {
 		return nil, err
 	}

@@ -3,7 +3,6 @@ package constellation
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/tv42/httpunix"
@@ -61,27 +60,6 @@ func UpCheck(c *Client) error {
 type Client struct {
 	httpClient *http.Client
 	BaseURL    string
-}
-
-func (c *Client) doJson(path string, apiReq interface{}) (*http.Response, error) {
-	buf := new(bytes.Buffer)
-	err := json.NewEncoder(buf).Encode(apiReq)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest("POST", c.BaseURL+path, buf)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("Non-200 status code: %+v", res)
-	}
-	return res, err
 }
 
 func (c *Client) SendPayload(pl []byte, b64From string, b64To []string) ([]byte, error) {

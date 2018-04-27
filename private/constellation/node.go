@@ -92,11 +92,14 @@ func (c *Client) SendPayload(pl []byte, b64From string, b64To []string) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
+		io.Copy(ioutil.Discard, res.Body)
 		return nil, fmt.Errorf("Non-200 status code: %+v", res)
 	}
-	defer res.Body.Close()
-	return ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, res.Body))
+	body, err := ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, res.Body))
+	io.Copy(ioutil.Discard, res.Body)
+	return body, err
 }
 
 func (c *Client) ReceivePayload(key []byte) ([]byte, error) {
@@ -109,11 +112,14 @@ func (c *Client) ReceivePayload(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
+		io.Copy(ioutil.Discard, res.Body)
 		return nil, fmt.Errorf("Non-200 status code: %+v", res)
 	}
-	defer res.Body.Close()
-	return ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
+	io.Copy(ioutil.Discard, res.Body)
+	return body, err
 }
 
 func NewClient(config *Config) (*Client, error) {

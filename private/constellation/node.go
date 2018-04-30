@@ -3,7 +3,6 @@ package constellation
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/tv42/httpunix"
@@ -47,6 +46,21 @@ func unixClient(socketPath string) *http.Client {
 	}
 }
 
+func httpTransport() *http.Transport {
+	return &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     90 * time.Second,
+	}
+}
+
+func httpClient() *http.Client {
+	return &http.Client{
+		Timeout:   time.Second * 5,
+		Transport: httpTransport(),
+	}
+}
+
 func UpCheck(c *Client) error {
 	res, err := c.httpClient.Get(c.BaseURL + "upcheck")
 	if err != nil {
@@ -61,27 +75,6 @@ func UpCheck(c *Client) error {
 type Client struct {
 	httpClient *http.Client
 	BaseURL    string
-}
-
-func (c *Client) doJson(path string, apiReq interface{}) (*http.Response, error) {
-	buf := new(bytes.Buffer)
-	err := json.NewEncoder(buf).Encode(apiReq)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest("POST", c.BaseURL+path, buf)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	res, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("Non-200 status code: %+v", res)
-	}
-	return res, err
 }
 
 func (c *Client) SendPayload(pl []byte, b64From string, b64To []string) ([]byte, error) {
@@ -99,11 +92,14 @@ func (c *Client) SendPayload(pl []byte, b64From string, b64To []string) ([]byte,
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
+		io.Copy(ioutil.Discard, res.Body)
 		return nil, fmt.Errorf("Non-200 status code: %+v", res)
 	}
-	defer res.Body.Close()
-	return ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, res.Body))
+	body, err := ioutil.ReadAll(base64.NewDecoder(base64.StdEncoding, res.Body))
+	io.Copy(ioutil.Discard, res.Body)
+	return body, err
 }
 
 func (c *Client) ReceivePayload(key []byte) ([]byte, error) {
@@ -116,11 +112,14 @@ func (c *Client) ReceivePayload(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer res.Body.Close()
 	if res.StatusCode != 200 {
+		io.Copy(ioutil.Discard, res.Body)
 		return nil, fmt.Errorf("Non-200 status code: %+v", res)
 	}
-	defer res.Body.Close()
-	return ioutil.ReadAll(res.Body)
+	body, err := ioutil.ReadAll(res.Body)
+	io.Copy(ioutil.Discard, res.Body)
+	return body, err
 }
 
 func NewClient(config *Config) (*Client, error) {
@@ -131,7 +130,7 @@ func NewClient(config *Config) (*Client, error) {
 		client = unixClient(socketPath)
 		baseURL = "http+unix://c/"
 	} else {
-		client = http.DefaultClient
+		client = httpClient()
 		baseURL = config.BaseURL
 		if baseURL[len(baseURL)-1:] != "/" {
 			baseURL += "/"
